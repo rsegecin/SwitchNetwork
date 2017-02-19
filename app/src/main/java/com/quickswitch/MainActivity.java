@@ -3,10 +3,8 @@ package com.quickswitch;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.net.ConnectivityManager;
-import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
-import android.net.NetworkInfo;
 import android.net.NetworkRequest;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiInfo;
@@ -63,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
 		conMan.registerNetworkCallback(request.build(), new NetCallback());
 	}
 
+	// Listen the button click event, if it's not connected to the right network it changes.
 	private class btnGateListener implements View.OnClickListener {
 		@Override
 		public void onClick(View view) {
@@ -82,7 +81,7 @@ public class MainActivity extends AppCompatActivity {
 				progress = new ProgressDialog(MainActivity.this);
 				progress.setTitle("Connecting");
 				progress.setMessage("Connecting with gate...");
-				progress.setCancelable(false); // disable dismiss by tapping outside of the dialog
+				progress.setCancelable(true); // disable dismiss by tapping outside of the dialog
 				progress.show();
 
 				for (WifiConfiguration i : list) {
@@ -99,6 +98,7 @@ public class MainActivity extends AppCompatActivity {
 		}
 	}
 
+	// Listener to when the network is switched and connected to the network defined above.
 	private class NetCallback extends ConnectivityManager.NetworkCallback {
 		@Override
 		public void onAvailable(Network network) {
@@ -123,6 +123,7 @@ public class MainActivity extends AppCompatActivity {
 		}
 	}
 
+	// Adds the network configuration defined above to the WiFi manager.
 	private void Configure() {
 		boolean configured = false;
 		WifiManager wifiManager = (WifiManager) getBaseContext().getSystemService(Context.WIFI_SERVICE);
@@ -149,6 +150,7 @@ public class MainActivity extends AppCompatActivity {
 		}
 	}
 
+	// Calls the http service.
 	private void CallService() {
 		client.get(SERVICE_ADDRESS, new JsonHttpResponseHandler() {
 
