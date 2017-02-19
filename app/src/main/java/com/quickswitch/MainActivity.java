@@ -47,14 +47,6 @@ public class MainActivity extends AppCompatActivity {
 
 	ProgressDialog progress;
 
-//	public BroadcastReceiver WifiReceiver = new BroadcastReceiver() {
-//
-//		@Override
-//		public void onReceive(Context context, Intent intent) {
-//
-//		}
-//	};
-
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -71,8 +63,6 @@ public class MainActivity extends AppCompatActivity {
 
 		Configure();
 
-		//this.registerReceiver(WifiReceiver, new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION));
-
 		final ConnectivityManager conMan =
 				(ConnectivityManager) this.getSystemService(Context.CONNECTIVITY_SERVICE);
 		final NetworkInfo netInfo = conMan.getActiveNetworkInfo();
@@ -85,7 +75,6 @@ public class MainActivity extends AppCompatActivity {
 					@Override
 					public void onAvailable(Network network) {
 						conMan.bindProcessToNetwork(network);
-						Log.d(LOG, "WiFi only.");
 
 						if (netInfo != null && netInfo.getType() == ConnectivityManager.TYPE_WIFI) {
 							WifiManager wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
@@ -98,11 +87,9 @@ public class MainActivity extends AppCompatActivity {
 								actionFlag = false;
 								CallService();
 							}
-
-							if (progress != null) progress.dismiss();
-						} else {
-							if (progress != null) progress.dismiss();
 						}
+
+						if (progress != null) progress.dismiss();
 					}
 				});
 	}
