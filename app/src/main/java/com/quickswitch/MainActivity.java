@@ -1,11 +1,9 @@
 package com.quickswitch;
 
 import android.app.ProgressDialog;
-import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.net.ConnectivityManager;
+import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
@@ -13,17 +11,15 @@ import android.net.NetworkRequest;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
-import android.os.Build;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
-import android.widget.Toast;
 
-import com.loopj.android.http.*;
+import com.loopj.android.http.AsyncHttpClient;
+import com.loopj.android.http.JsonHttpResponseHandler;
 
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -38,14 +34,16 @@ public class MainActivity extends AppCompatActivity {
 
 	Button btnGate;
 
+	ConnectivityManager conMan;
+
 	String networkSSID = "\"ESPap\"";
 	String networkPass = "\"thereisnospoon\"";
-
-	boolean actionFlag = false;
 
 	AsyncHttpClient client = new AsyncHttpClient();
 
 	ProgressDialog progress;
+
+	boolean doActionFlag = false;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -53,45 +51,76 @@ public class MainActivity extends AppCompatActivity {
 		setContentView(R.layout.activity_main);
 
 		btnGate = (Button) findViewById(R.id.btnGate);
+		btnGate.setOnClickListener(new btnGateListener());
 
-		btnGate.setOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View view) {
-				DoAction();
-			}
-		});
+		conMan = (ConnectivityManager) this.getSystemService(Context.CONNECTIVITY_SERVICE);
 
 		Configure();
-
-		final ConnectivityManager conMan =
-				(ConnectivityManager) this.getSystemService(Context.CONNECTIVITY_SERVICE);
-		final NetworkInfo netInfo = conMan.getActiveNetworkInfo();
 
 		NetworkRequest.Builder request = new NetworkRequest.Builder();
 		request.addTransportType(NetworkCapabilities.TRANSPORT_WIFI);
 
-		conMan.registerNetworkCallback(request.build(),
-				new ConnectivityManager.NetworkCallback() {
-					@Override
-					public void onAvailable(Network network) {
-						conMan.bindProcessToNetwork(network);
+		conMan.registerNetworkCallback(request.build(), new NetCallback());
+	}
 
-						if (netInfo != null && netInfo.getType() == ConnectivityManager.TYPE_WIFI) {
-							WifiManager wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
-							WifiInfo info = wifiManager.getConnectionInfo();
-							String ssid = info.getSSID();
+	private class btnGateListener implements View.OnClickListener {
+		@Override
+		public void onClick(View view) {
+			WifiManager wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
+			List<WifiConfiguration> list = wifiManager.getConfiguredNetworks();
 
-							Log.d(LOG, "Connected with " + ssid);
+			WifiInfo info = wifiManager.getConnectionInfo();
+			String ssid = info.getSSID();
 
-							if ((actionFlag) && (ssid.equals(networkSSID))) {
-								actionFlag = false;
-								CallService();
-							}
-						}
+			doActionFlag = true;
 
-						if (progress != null) progress.dismiss();
+			if (ssid.equals(networkSSID)) {
+				CallService();
+			} else {
+				Log.d(LOG, "Connecting with gate.");
+
+				progress = new ProgressDialog(MainActivity.this);
+				progress.setTitle("Connecting");
+				progress.setMessage("Connecting with gate...");
+				progress.setCancelable(false); // disable dismiss by tapping outside of the dialog
+				progress.show();
+
+				for (WifiConfiguration i : list) {
+					if (i.SSID != null && i.SSID.equals(networkSSID)) {
+						wifiManager.disconnect();
+						wifiManager.enableNetwork(i.networkId, true);
+						wifiManager.reconnect();
+
+						Log.d(LOG, "Reconnecting with " + networkSSID);
+						break;
 					}
-				});
+				}
+			}
+		}
+	}
+
+	private class NetCallback extends ConnectivityManager.NetworkCallback {
+		@Override
+		public void onAvailable(Network network) {
+			Log.d(LOG, "Network available.");
+			if (conMan != null)
+				conMan.bindProcessToNetwork(network);
+
+			if (progress != null) progress.dismiss();
+
+			if (doActionFlag) {
+				WifiManager wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
+				WifiInfo info = wifiManager.getConnectionInfo();
+				String ssid = info.getSSID();
+
+				Log.d(LOG, "Connected with " + ssid);
+
+				if (ssid.equals(networkSSID)) {
+					doActionFlag = false;
+					CallService();
+				}
+			}
+		}
 	}
 
 	private void Configure() {
@@ -120,41 +149,8 @@ public class MainActivity extends AppCompatActivity {
 		}
 	}
 
-	private void DoAction() {
-		WifiManager wifiManager = (WifiManager) getBaseContext().getSystemService(Context.WIFI_SERVICE);
-		List<WifiConfiguration> list = wifiManager.getConfiguredNetworks();
-
-		WifiInfo info = wifiManager.getConnectionInfo();
-		String ssid = info.getSSID();
-
-		if (ssid.equals(networkSSID)) {
-			CallService();
-		} else {
-			Log.d(LOG, "Connecting with gate.");
-
-			actionFlag = true;
-
-			progress = new ProgressDialog(this);
-			progress.setTitle("Connecting");
-			progress.setMessage("Connecting with gate...");
-			progress.setCancelable(false); // disable dismiss by tapping outside of the dialog
-			progress.show();
-
-			for (WifiConfiguration i : list) {
-				if (i.SSID != null && i.SSID.equals(networkSSID)) {
-					wifiManager.disconnect();
-					wifiManager.enableNetwork(i.networkId, true);
-					wifiManager.reconnect();
-
-					Log.d(LOG, "Reconnecting with " + networkSSID);
-					break;
-				}
-			}
-		}
-	}
-
 	private void CallService() {
-		client.get(SERVICE_ADDRESS, new AsyncHttpResponseHandler() {
+		client.get(SERVICE_ADDRESS, new JsonHttpResponseHandler() {
 
 			@Override
 			public void onStart() {
@@ -162,32 +158,21 @@ public class MainActivity extends AppCompatActivity {
 			}
 
 			@Override
-			public void onSuccess(int statusCode, Header[] headers, byte[] responseBody) {
-				Log.d(LOG, "Service success");
-			}
+			public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+				Log.d(LOG, "Service success JSONObject");
 
-			@Override
-			public void onFailure(int statusCode, Header[] headers, byte[] responseBody, Throwable error) {
-				Log.d(LOG, "Service failure");
-			}
+				try {
+					String r = (String) response.get("ledstate");
 
-//			@Override
-//			public void onSuccess(int statusCode, Header[] headers, JSONArray response) {
-//				Log.d(LOG, "Service success JSONArray");
-//			}
-//
-//			@Override
-//			public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
-//				Log.d(LOG, "Service success JSONObject");
-////
-////				try {
-////					boolean ledstate = Boolean.valueOf((String) response.get("ledstate"));
-////
-////				} catch (JSONException e) {
-////					e.printStackTrace();
-////				}
-//
-//			}
+					if (r.equals("0"))
+						Log.d(LOG, "LED state false");
+					else if (r.equals("1"))
+						Log.d(LOG, "LED state true");
+
+				} catch (JSONException e) {
+					e.printStackTrace();
+				}
+			}
 		});
 	}
 }
